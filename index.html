@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Generator (Browser Only)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-700">
+        <div class="flex items-center gap-3 mb-2">
+            <span class="text-3xl">🎙️</span>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                AI Text-to-Speech Studio
+            </h1>
+        </div>
+        <p class="text-slate-400 text-sm mb-6">
+            แปลงข้อความเป็นเสียงพูดบนเบราว์เซอร์ เลือกเสียง ปรับอารมณ์ และส่งออกเป็นไฟล์เสียงได้ทันที
+        </p>
+
+        <!-- ช่องกรอกข้อความ -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-300 mb-2">ข้อความที่ต้องการแปลง:</label>
+            <textarea id="textInput" rows="4" 
+                placeholder="พิมพ์ข้อความภาษาไทย หรือ ภาษาอังกฤษ ที่นี่..."
+                class="w-full rounded-xl bg-slate-900 border border-slate-700 p-3.5 text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- เลือกเสียงพูด -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">เลือกเสียงพูด (Voice):</label>
+                <select id="voiceSelect" class="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">กำลังโหลดรายชื่อเสียง...</option>
+                </select>
+            </div>
+
+            <!-- เลือกอารมณ์ -->
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">เลือกอารมณ์ (Emotion):</label>
+                <select id="emotionSelect" class="w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="neutral">😐 ปกติ / ทางการ (Neutral)</option>
+                    <option value="cheerful">😄 สดใส / ร่าเริง (Cheerful)</option>
+                    <option value="serious">🧐 จริงจัง / สุขุม (Serious)</option>
+                    <option value="sad">😔 เศร้า / ช้าลง (Sad)</option>
+                    <option value="excited">🤩 ตื่นเต้น / รวดเร็ว (Excited)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- ปรับแต่งละเอียด -->
+        <div class="grid grid-cols-2 gap-4 mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+            <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>ความเร็ว (Rate)</span>
+                    <span id="rateVal">1.0</span>
+                </div>
+                <input type="range" id="rate" min="0.5" max="1.8" value="1" step="0.1" class="w-full accent-indigo-500">
+            </div>
+            <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>ระดับเสียง (Pitch)</span>
+                    <span id="pitchVal">1.0</span>
+                </div>
+                <input type="range" id="pitch" min="0.5" max="1.8" value="1" step="0.1" class="w-full accent-indigo-500">
+            </div>
+        </div>
+
+        <!-- ปุ่มควบคุม -->
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button id="speakBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-indigo-600/20 cursor-pointer">
+                🔊 เล่นเสียง (Play)
+            </button>
+            <button id="stopBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-3 px-4 rounded-xl transition cursor-pointer">
+                ⏹️ หยุด
+            </button>
+            <button id="downloadBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-emerald-600/20 cursor-pointer">
+                📥 ส่งออกไฟล์เสียง (.WAV)
+            </button>
+        </div>
+
+        <!-- สถานะการทำงาน -->
+        <p id="statusText" class="text-center text-xs text-slate-400 mt-4 h-4"></p>
+    </div>
+
+    <script>
+        const synth = window.speechSynthesis;
+        const textInput = document.getElementById('textInput');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const emotionSelect = document.getElementById('emotionSelect');
+        const rateInput = document.getElementById('rate');
+        const pitchInput = document.getElementById('pitch');
+        const rateVal = document.getElementById('rateVal');
+        const pitchVal = document.getElementById('pitchVal');
+        const statusText = document.getElementById('statusText');
+
+        let voices = [];
+
+        // โหลดรายชื่อเสียงที่มีในเบราว์เซอร์
+        function loadVoices() {
+            voices = synth.getVoices();
+            if (voices.length === 0) return;
+
+            voiceSelect.innerHTML = '';
+            // จัดเรียงให้ภาษาไทยและอังกฤษอยู่ด้านบน
+            voices.sort((a, b) => {
+                const aPriority = a.lang.includes('th') || a.lang.includes('en') ? -1 : 1;
+                const bPriority = b.lang.includes('th') || b.lang.includes('en') ? -1 : 1;
+                return aPriority - bPriority;
+            });
+
+            voices.forEach((voice, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.lang.includes('th')) option.selected = true;
+                voiceSelect.appendChild(option);
+            });
+        }
+
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        // ปรับค่า Rate & Pitch อัตโนมัติตามอารมณ์ที่เลือก
+        emotionSelect.addEventListener('change', () => {
+            const presets = {
+                neutral: { rate: 1.0, pitch: 1.0 },
+                cheerful: { rate: 1.15, pitch: 1.25 },
+                serious: { rate: 0.9, pitch: 0.8 },
+                sad: { rate: 0.75, pitch: 0.85 },
+                excited: { rate: 1.35, pitch: 1.3 }
+            };
+            const selected = presets[emotionSelect.value];
+            rateInput.value = selected.rate;
+            pitchInput.value = selected.pitch;
+            rateVal.textContent = selected.rate;
+            pitchVal.textContent = selected.pitch;
+        });
+
+        rateInput.addEventListener('input', () => rateVal.textContent = rateInput.value);
+        pitchInput.addEventListener('input', () => pitchVal.textContent = pitchInput.value);
+
+        // ฟังก์ชันสร้าง Object คำพูด
+        function createUtterance() {
+            const utterance = new SpeechSynthesisUtterance(textInput.value);
+            const selectedVoice = voices[voiceSelect.value];
+            if (selectedVoice) utterance.voice = selectedVoice;
+            utterance.rate = parseFloat(rateInput.value);
+            utterance.pitch = parseFloat(pitchInput.value);
+            return utterance;
+        }
+
+        // ปุ่มเล่นเสียง
+        document.getElementById('speakBtn').addEventListener('click', () => {
+            if (!textInput.value.trim()) {
+                statusText.textContent = '⚠️ กรุณากรอกข้อความก่อนเล่นเสียง';
+                return;
+            }
+            synth.cancel();
+            const utterance = createUtterance();
+            utterance.onstart = () => statusText.textContent = '🔊 กำลังเล่นเสียง...';
+            utterance.onend = () => statusText.textContent = '✅ เล่นเสียงเสร็จสิ้น';
+            synth.speak(utterance);
+        });
+
+        // ปุ่มหยุด
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            synth.cancel();
+            statusText.textContent = '⏹️ หยุดเล่นเสียงแล้ว';
+        });
+
+        // ปุ่มส่งออกไฟล์เสียง (ใช้ Google TTS Endpoint ฟรีเพื่อดาวน์โหลดไฟล์เสียงจริง)
+        document.getElementById('downloadBtn').addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                statusText.textContent = '⚠️ กรุณากรอกข้อความก่อนส่งออกไฟล์';
+                return;
+            }
+
+            const selectedVoice = voices[voiceSelect.value];
+            const lang = selectedVoice ? selectedVoice.lang.split('-')[0] : 'th';
+            
+            statusText.textContent = '⏳ กำลังสร้างไฟล์เสียงสำหรับดาวน์โหลด...';
+
+            try {
+                // สร้างลิงก์ดาวน์โหลดเสียงผ่าน Web Audio / Blob Fallback
+                const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encodeURIComponent(text.substring(0, 200))}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) throw new Error('Network block');
+                
+                const blob = await response.blob();
+                const downloadUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `ai-voice-${emotionSelect.value}.mp3`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                statusText.textContent = '✅ ดาวน์โหลดไฟล์เสียงสำเร็จ!';
+            } catch (err) {
+                // กรณีติด CORS บนเบราว์เซอร์ ให้เปิดหน้าต่างบันทึกเสียงโดยตรง
+                const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encodeURIComponent(text.substring(0, 200))}`;
+                window.open(fallbackUrl, '_blank');
+                statusText.textContent = 'ℹ️ เปิดหน้าต่างไฟล์เสียงแล้ว (กดปุ่ม 3 จุด > ดาวน์โหลด)';
+            }
+        });
+    </script>
+</body>
+  </html>
